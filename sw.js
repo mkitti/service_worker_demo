@@ -1,4 +1,7 @@
-const ZARR_PREFIX = '/zarr/mandelbrot';
+// Derive base path from the SW's own URL so this works under any subpath
+// e.g. '/' on localhost, '/service_worker_demo/' on GitHub Pages
+const SW_BASE = new URL('.', self.location.href).pathname;
+const ZARR_PREFIX = SW_BASE + 'zarr/mandelbrot';
 const SHAPE_H = 2048;
 const SHAPE_W = 2048;
 const CHUNK_H = 256;

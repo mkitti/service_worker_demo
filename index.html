@@ -191,8 +191,9 @@ function paintChunk(cy, cx, raw) {
 }
 
 // ── neuroglancer link ─────────────────────────────────────────────────────────
-function buildNgLink(origin) {
-  const src = `zarr://${origin}/zarr/mandelbrot`;
+function buildNgLink() {
+  const base = new URL('./zarr/mandelbrot', window.location.href).href;
+  const src = `zarr://${base}`;
   const state = {
     dimensions: {x: [1, 'px'], y: [1, 'px'], z: [1, 'px']},
     position: [1024.5, 1024.5, 0.5],
@@ -227,7 +228,7 @@ async function main() {
   });
 
   log('Registering service worker…');
-  await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.register('./sw.js');
 
   // Wait until this page is controlled by the SW (may need one tick after claim())
   if (!navigator.serviceWorker.controller) {
@@ -240,10 +241,10 @@ async function main() {
   setStatus('Service worker active');
 
   // Fetch & display metadata
-  const meta = await fetch('/zarr/mandelbrot/zarr.json').then(r => r.json());
+  const meta = await fetch('./zarr/mandelbrot/zarr.json').then(r => r.json());
   document.getElementById('meta-box').textContent = JSON.stringify(meta, null, 2);
 
-  buildNgLink(window.location.origin);
+  buildNgLink();
 
   // Load all 64 chunks in parallel, paint each as it arrives
   let done = 0;
@@ -253,7 +254,7 @@ async function main() {
   for (let cy = 0; cy < CHUNKS_Y; cy++) {
     for (let cx = 0; cx < CHUNKS_X; cx++) {
       chunkJobs.push(
-        fetch(`/zarr/mandelbrot/0/${cy}/${cx}`)
+        fetch(`./zarr/mandelbrot/0/${cy}/${cx}`)
           .then(r => r.arrayBuffer())
           .then(buf => {
             paintChunk(cy, cx, new Uint8Array(buf));

@@ -98,10 +98,9 @@
       <h2>Open in Neuroglancer</h2>
       <a id="ng-link" class="ng-link" href="#" target="_blank">Building link…</a>
       <p class="note">
-        Requires this page to be served over <strong>HTTPS</strong> so that
-        neuroglancer-demo.appspot.com can fetch the chunks. Works out of the box
-        if deployed to GitHub Pages, Netlify, etc. Over plain HTTP, use a local
-        Neuroglancer instance pointed at <code>zarr://[origin]/zarr/mandelbrot</code>.
+        Opens a self-hosted Neuroglancer on the same origin as this page, so the
+        service worker intercepts its chunk requests too. Visit this demo page
+        first to register the SW, then click the link above.
       </p>
     </div>
   </div>
@@ -192,8 +191,8 @@ function paintChunk(cy, cx, raw) {
 
 // ── neuroglancer link ─────────────────────────────────────────────────────────
 function buildNgLink() {
-  const base = new URL('./zarr/mandelbrot', window.location.href).href;
-  const src = `zarr://${base}`;
+  const zarrUrl = new URL('./zarr/mandelbrot', window.location.href).href;
+  const src = `zarr://${zarrUrl}`;
   const state = {
     dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},
     position: [1024.5, 1024.5, 0.5],
@@ -208,11 +207,12 @@ function buildNgLink() {
     selectedLayer: {visible: true, layer: 'mandelbrot'},
     layout: 'xy',
   };
-  const ngBase = 'https://neuroglancer-demo.appspot.com/#!';
-  const url = ngBase + JSON.stringify(state);
+  // Point at our self-hosted Neuroglancer (same origin = SW can intercept its fetches)
+  const ngUrl = new URL('./neuroglancer/', window.location.href).href;
+  const url = ngUrl + '#!' + JSON.stringify(state);
   const el = document.getElementById('ng-link');
   el.href = url;
-  el.textContent = url.length > 80 ? src : url;
+  el.textContent = src;
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ async function main() {
   for (let cy = 0; cy < CHUNKS_Y; cy++) {
     for (let cx = 0; cx < CHUNKS_X; cx++) {
       chunkJobs.push(
-        fetch(`./zarr/mandelbrot/0/${cy}/${cx}`)
+        fetch(`./zarr/mandelbrot/c/0/${cy}/${cx}`)
           .then(r => r.arrayBuffer())
           .then(buf => {
             paintChunk(cy, cx, new Uint8Array(buf));

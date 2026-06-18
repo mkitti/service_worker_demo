@@ -50,10 +50,10 @@ function handleZarr(subpath) {
     });
   }
 
-  // Chunk key format: "0/{cy}/{cx}"
+  // Zarr v3 default chunk key encoding: "c/{z}/{cy}/{cx}"
   const parts = path.split('/');
-  if (parts.length === 3) {
-    const [z, cy, cx] = parts.map(Number);
+  if (parts.length === 4 && parts[0] === 'c') {
+    const [, z, cy, cx] = parts.map((v, i) => i === 0 ? v : Number(v));
     if (z === 0 && Number.isFinite(cy) && Number.isFinite(cx)) {
       const t0 = performance.now();
       const data = computeChunk(cy, cx);

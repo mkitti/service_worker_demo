@@ -65,8 +65,11 @@
 <body>
 <h1>Mandelbrot via Service Worker + Zarr v3</h1>
 <p class="subtitle">
-  A JavaScript service worker intercepts HTTP requests and synthesizes Zarr v3 chunks on the fly —
-  no server required. The Mandelbrot set is computed per-chunk and served as valid Zarr v3 data.
+  A JavaScript service worker intercepts HTTP requests and synthesizes Zarr v3 chunks
+  <strong style="color:#e6edf3">on demand, with zero pre-rendering</strong> —
+  no server, no pre-computed data. The Mandelbrot set is computed in the worker thread
+  at the moment each chunk is requested. The chunk log below shows every computation as it happens.
+  10-level OME-NGFF 0.5 pyramid (131072 → 256 px) served entirely from client-side JS.
 </p>
 
 <div class="layout">
@@ -83,7 +86,7 @@
 
     <!-- Zarr metadata -->
     <div class="card">
-      <h2>Zarr v3 Metadata  <code style="font-size:0.75rem;color:#8b949e">/zarr/mandelbrot/4/zarr.json</code></h2>
+      <h2>Zarr v3 Metadata  <code style="font-size:0.75rem;color:#8b949e">/zarr/mandelbrot/8/zarr.json</code></h2>
       <div id="meta-box">Loading…</div>
     </div>
 
@@ -108,9 +111,9 @@
 
 <script>
 const CANVAS_PX  = 512;
-// Use pyramid level 4 (512×512) for the canvas preview — 1:1 pixel mapping,
-// only 4 chunks to fetch, renders quickly.
-const CANVAS_LEVEL = 4;
+// Use pyramid level 8 (512×512) for the canvas preview — 1:1 pixel mapping,
+// only 4 chunks to fetch, renders quickly. (131072 >> 8 = 512)
+const CANVAS_LEVEL = 8;
 const SHAPE_H    = 512;   // 8192 >> 4
 const SHAPE_W    = 512;
 const CHUNK_H    = 256;
@@ -196,18 +199,19 @@ function paintChunk(cy, cx, raw) {
 function buildNgLink() {
   const zarrUrl = new URL('./zarr/mandelbrot', window.location.href).href;
   const src = `zarr://${zarrUrl}`;
-  // Position is stored as voxel_index / voxel_size_in_m.
-  // Level 0 is 8192px at 1nm/voxel; center voxel = 4096 → 4096 / 1e-9 = 4.096e12.
-  const center = 4096 / 1e-9;
+  // Position is in level-0 voxels. Center of 131072-px array = 65536.
+  // crossSectionScale: proportional to 13.28 (working at 8192px) * 16 = ~213.
   const state = {
     dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},
-    position: [center, center, 0.5],
-    crossSectionScale: 2895125683.7931094,
+    position: [65536, 65536, 0.5],
+    crossSectionScale: 213,
     projectionScale: 2048,
     layers: [{
       type: 'image',
       source: src,
-      tab: 'source',
+      tab: 'rendering',
+      shaderControls: {normalized: {range: [11, 207]}},
+      crossSectionRenderScale: 0.0625,
       name: 'mandelbrot',
     }],
     selectedLayer: {visible: true, layer: 'mandelbrot'},

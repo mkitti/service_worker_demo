@@ -4,8 +4,8 @@ const SW_BASE = new URL('.', self.location.href).pathname;
 const ZARR_PREFIX = SW_BASE + 'zarr/mandelbrot';
 
 // Pyramid: level 0 = finest (BASE_SIZE×BASE_SIZE), each level halves resolution
-const N_LEVELS  = 6;
-const BASE_SIZE = 8192;   // pixels at level 0
+const N_LEVELS  = 10;
+const BASE_SIZE = 131072;   // pixels at level 0  (2^17, 4 extra high-res levels)
 const CHUNK_SIZE = 256;
 const MAX_ITER   = 255;
 const X_MIN = -2.5, X_MAX = 1.0;

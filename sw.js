@@ -7,7 +7,7 @@ const ZARR_PREFIX = SW_BASE + 'zarr/mandelbrot';
 // 256 levels creates the illusion of near-infinite zoom in Neuroglancer.
 // Meaningful Mandelbrot detail exists for levels ~211-255 (float64 precision
 // limits finer levels to uniform output, but all levels serve valid chunks).
-const N_LEVELS  = 256;
+const N_LEVELS  = 32;
 const CHUNK_SIZE = 256;
 const MAX_ITER   = 255;
 const X_MIN = -2.5, X_MAX = 1.0;

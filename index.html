@@ -60,7 +60,8 @@
   /* Toggle button — floats over the viewer, always visible */
   #toggle-btn {
     position: absolute;
-    top: 10px; left: 10px;
+    top: 50%; left: 10px;
+    transform: translateY(-50%);
     z-index: 200;
     background: rgba(13, 17, 23, 0.82);
     border: 1px solid #30363d;
@@ -145,7 +146,7 @@
       <div>
         <h1>Mandelbrot via<br>Service Worker + Zarr&nbsp;v3</h1>
         <div class="subtitle">
-          256-level OME-NGFF&nbsp;0.5 pyramid · computed on demand ·
+          32-level OME-NGFF&nbsp;0.5 pyramid · computed on demand ·
           zero pre-rendering · served entirely from client-side&nbsp;JS
         </div>
       </div>

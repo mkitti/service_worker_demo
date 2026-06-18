@@ -193,10 +193,13 @@ function paintChunk(cy, cx, raw) {
 function buildNgLink() {
   const zarrUrl = new URL('./zarr/mandelbrot', window.location.href).href;
   const src = `zarr://${zarrUrl}`;
+  // Position is stored as voxel_index / voxel_size_in_m.
+  // With 1nm/voxel (1e-9 m), center of 2048-px array = 1024 / 1e-9 = 1.024e12.
+  const center = 1024 / 1e-9;
   const state = {
     dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},
-    position: [1024.5, 1024.5, 0.5],
-    crossSectionScale: 4,
+    position: [center, center, 0.5],
+    crossSectionScale: 2895125683.7931094,
     projectionScale: 2048,
     layers: [{
       type: 'image',

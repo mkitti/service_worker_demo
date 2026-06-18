@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandelbrot via Service Worker + Zarr v3</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 6px; color: #e6edf3; }
+  .subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 24px; }
+  .layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  canvas {
+    display: block;
+    width: 512px; height: 512px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #000;
+    flex-shrink: 0;
+  }
+  .sidebar { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .card h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #8b949e; margin-bottom: 10px; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 0.75rem; font-weight: 600; margin-bottom: 8px;
+  }
+  .badge.ok  { background: #1a4731; color: #3fb950; }
+  .badge.wait { background: #2d2208; color: #d29922; }
+  .badge.err  { background: #3d0d0d; color: #f85149; }
+  #status-text { font-size: 0.85rem; color: #c9d1d9; }
+  #progress-bar-wrap {
+    height: 6px; background: #21262d; border-radius: 3px; margin-top: 10px; overflow: hidden;
+  }
+  #progress-bar { height: 100%; width: 0; background: #1f6feb; border-radius: 3px;
+    transition: width 0.15s ease; }
+  #meta-box { font-size: 0.78rem; font-family: monospace; color: #79c0ff;
+    white-space: pre; overflow-x: auto; }
+  #log {
+    font-size: 0.72rem; font-family: monospace; color: #8b949e;
+    height: 140px; overflow-y: auto; display: flex; flex-direction: column-reverse;
+  }
+  #log div { padding: 1px 0; }
+  #log div.chunk { color: #56d364; }
+  .ng-link {
+    font-size: 0.78rem; word-break: break-all; color: #58a6ff;
+    text-decoration: none; display: block; margin-top: 6px;
+  }
+  .ng-link:hover { text-decoration: underline; }
+  .note { font-size: 0.75rem; color: #8b949e; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>Mandelbrot via Service Worker + Zarr v3</h1>
+<p class="subtitle">
+  A JavaScript service worker intercepts HTTP requests and synthesizes Zarr v3 chunks on the fly —
+  no server required. The Mandelbrot set is computed per-chunk and served as valid Zarr v3 data.
+</p>
+
+<div class="layout">
+  <canvas id="canvas" width="512" height="512"></canvas>
+
+  <div class="sidebar">
+    <!-- Status -->
+    <div class="card">
+      <h2>Status</h2>
+      <span id="status-badge" class="badge wait">Initializing</span>
+      <div id="status-text">Registering service worker…</div>
+      <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+    </div>
+
+    <!-- Zarr metadata -->
+    <div class="card">
+      <h2>Zarr v3 Metadata  <code style="font-size:0.75rem;color:#8b949e">/zarr/mandelbrot/zarr.json</code></h2>
+      <div id="meta-box">Loading…</div>
+    </div>
+
+    <!-- Chunk log -->
+    <div class="card">
+      <h2>Chunk Log  (service worker → browser)</h2>
+      <div id="log"></div>
+    </div>
+
+    <!-- Neuroglancer -->
+    <div class="card">
+      <h2>Open in Neuroglancer</h2>
+      <a id="ng-link" class="ng-link" href="#" target="_blank">Building link…</a>
+      <p class="note">
+        Requires this page to be served over <strong>HTTPS</strong> so that
+        neuroglancer-demo.appspot.com can fetch the chunks. Works out of the box
+        if deployed to GitHub Pages, Netlify, etc. Over plain HTTP, use a local
+        Neuroglancer instance pointed at <code>zarr://[origin]/zarr/mandelbrot</code>.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const CANVAS_PX  = 512;
+const SHAPE_H    = 2048;
+const SHAPE_W    = 2048;
+const CHUNK_H    = 256;
+const CHUNK_W    = 256;
+const CHUNKS_Y   = SHAPE_H / CHUNK_H;   // 8
+const CHUNKS_X   = SHAPE_W / CHUNK_W;   // 8
+const TOTAL      = CHUNKS_Y * CHUNKS_X; // 64
+const SCALE      = SHAPE_H / CANVAS_PX; // 4  (sample every 4th source pixel)
+
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+const imgData = ctx.createImageData(CANVAS_PX, CANVAS_PX);
+
+// ── colormap ────────────────────────────────────────────────────────────────
+const STOPS = [
+  [0,   [  0,   7, 100]],
+  [64,  [ 12,  44, 138]],
+  [128, [ 57, 125, 209]],
+  [192, [237, 255, 255]],
+  [240, [255, 170,   0]],
+  [254, [220,  80,   0]],
+];
+
+function colorize(v) {
+  if (v >= 255) return [0, 0, 0]; // inside set
+  for (let i = 1; i < STOPS.length; i++) {
+    const [t1, c1] = STOPS[i];
+    if (v <= t1) {
+      const [t0, c0] = STOPS[i - 1];
+      const f = (v - t0) / (t1 - t0);
+      return [0, 1, 2].map(j => Math.round(c0[j] + f * (c1[j] - c0[j])));
+    }
+  }
+  return STOPS[STOPS.length - 1][1];
+}
+
+// ── logging helpers ──────────────────────────────────────────────────────────
+const logEl    = document.getElementById('log');
+const badge    = document.getElementById('status-badge');
+const statusEl = document.getElementById('status-text');
+const barEl    = document.getElementById('progress-bar');
+
+function log(msg, cls = '') {
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = msg;
+  logEl.prepend(d);
+}
+
+function setStatus(text, state = 'wait') {
+  statusEl.textContent = text;
+  badge.textContent = state === 'ok' ? 'Ready' : state === 'err' ? 'Error' : 'Working';
+  badge.className = 'badge ' + state;
+}
+
+function setProgress(n) {
+  barEl.style.width = Math.round((n / TOTAL) * 100) + '%';
+}
+
+// ── chunk renderer ───────────────────────────────────────────────────────────
+function paintChunk(cy, cx, raw) {
+  const step = SCALE; // sample stride in source pixels
+  const dstTileH = CHUNK_H / step;
+  const dstTileW = CHUNK_W / step;
+  const dstY0 = cy * dstTileH;
+  const dstX0 = cx * dstTileW;
+
+  for (let py = 0; py < dstTileH; py++) {
+    for (let px = 0; px < dstTileW; px++) {
+      const srcIdx = (py * step) * CHUNK_W + (px * step);
+      const [r, g, b] = colorize(raw[srcIdx]);
+      const dstIdx = ((dstY0 + py) * CANVAS_PX + (dstX0 + px)) * 4;
+      imgData.data[dstIdx]     = r;
+      imgData.data[dstIdx + 1] = g;
+      imgData.data[dstIdx + 2] = b;
+      imgData.data[dstIdx + 3] = 255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// ── neuroglancer link ─────────────────────────────────────────────────────────
+function buildNgLink(origin) {
+  const src = `zarr://${origin}/zarr/mandelbrot`;
+  const state = {
+    dimensions: {x: [1, 'px'], y: [1, 'px'], z: [1, 'px']},
+    position: [1024.5, 1024.5, 0.5],
+    crossSectionScale: 4,
+    projectionScale: 2048,
+    layers: [{
+      type: 'image',
+      source: src,
+      tab: 'source',
+      name: 'mandelbrot',
+    }],
+    selectedLayer: {visible: true, layer: 'mandelbrot'},
+    layout: 'xy',
+  };
+  const ngBase = 'https://neuroglancer-demo.appspot.com/#!';
+  const url = ngBase + JSON.stringify(state);
+  const el = document.getElementById('ng-link');
+  el.href = url;
+  el.textContent = url.length > 80 ? src : url;
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  if (!('serviceWorker' in navigator)) {
+    setStatus('Service workers not supported in this browser.', 'err');
+    return;
+  }
+
+  // Listen for chunk-served messages from the SW
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'chunk-served') log(e.data.msg, 'chunk');
+  });
+
+  log('Registering service worker…');
+  await navigator.serviceWorker.register('/sw.js');
+
+  // Wait until this page is controlled by the SW (may need one tick after claim())
+  if (!navigator.serviceWorker.controller) {
+    setStatus('Waiting for service worker to activate…');
+    await new Promise(resolve =>
+      navigator.serviceWorker.addEventListener('controllerchange', resolve, {once: true})
+    );
+  }
+  log('Service worker active — fetching Zarr metadata');
+  setStatus('Service worker active');
+
+  // Fetch & display metadata
+  const meta = await fetch('/zarr/mandelbrot/zarr.json').then(r => r.json());
+  document.getElementById('meta-box').textContent = JSON.stringify(meta, null, 2);
+
+  buildNgLink(window.location.origin);
+
+  // Load all 64 chunks in parallel, paint each as it arrives
+  let done = 0;
+  setStatus(`Loading ${TOTAL} Zarr v3 chunks…`);
+
+  const chunkJobs = [];
+  for (let cy = 0; cy < CHUNKS_Y; cy++) {
+    for (let cx = 0; cx < CHUNKS_X; cx++) {
+      chunkJobs.push(
+        fetch(`/zarr/mandelbrot/0/${cy}/${cx}`)
+          .then(r => r.arrayBuffer())
+          .then(buf => {
+            paintChunk(cy, cx, new Uint8Array(buf));
+            done++;
+            setProgress(done);
+            if (done === TOTAL) setStatus(`All ${TOTAL} chunks loaded.`, 'ok');
+          })
+      );
+    }
+  }
+
+  await Promise.all(chunkJobs);
+}
+
+main().catch(err => {
+  setStatus('Error: ' + err.message, 'err');
+  log('ERROR: ' + err.message);
+});
+</script>
+</body>
+</html>

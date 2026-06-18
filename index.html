@@ -161,7 +161,7 @@
 
       <!-- Thumbnail canvas (level 255 = 1 chunk, 256×256 px) -->
       <div class="card">
-        <div class="card-title">Preview — level&nbsp;255 · 256×256&nbsp;px</div>
+        <div class="card-title">Preview — level&nbsp;31 · 256×256&nbsp;px</div>
         <canvas id="canvas" width="256" height="256"></canvas>
       </div>
 
@@ -173,7 +173,7 @@
 
       <!-- Zarr metadata -->
       <div class="card">
-        <div class="card-title">Zarr&nbsp;v3 Metadata — level&nbsp;255</div>
+        <div class="card-title">Zarr&nbsp;v3 Metadata — level&nbsp;31</div>
         <div id="meta-box">Loading…</div>
       </div>
 
@@ -205,7 +205,8 @@
 </div>
 <script>
 // Coarsest level: 256×256 px, exactly 1 chunk — renders instantly as thumbnail.
-const CANVAS_LEVEL = 255;
+// Must match N_LEVELS - 1 in sw.js.
+const CANVAS_LEVEL = 31;
 
 const canvas  = document.getElementById('canvas');
 const ctx     = canvas.getContext('2d');

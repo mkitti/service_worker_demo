@@ -3,9 +3,11 @@
 const SW_BASE = new URL('.', self.location.href).pathname;
 const ZARR_PREFIX = SW_BASE + 'zarr/mandelbrot';
 
-// Pyramid: level 0 = finest (BASE_SIZE×BASE_SIZE), each level halves resolution
-const N_LEVELS  = 10;
-const BASE_SIZE = 131072;   // pixels at level 0  (2^17, 4 extra high-res levels)
+// Pyramid: level 0 = finest (~2^263 px), level 255 = coarsest (256 px)
+// 256 levels creates the illusion of near-infinite zoom in Neuroglancer.
+// Meaningful Mandelbrot detail exists for levels ~211-255 (float64 precision
+// limits finer levels to uniform output, but all levels serve valid chunks).
+const N_LEVELS  = 256;
 const CHUNK_SIZE = 256;
 const MAX_ITER   = 255;
 const X_MIN = -2.5, X_MAX = 1.0;
@@ -71,6 +73,12 @@ function handleZarr(subpath) {
   return new Response('Not found', {status: 404, headers: corsHeaders()});
 }
 
+// Array size at a given level. Uses Math.pow to avoid 32-bit >> overflow.
+// level 0: CHUNK_SIZE * 2^255 ≈ 1.48e79   level 255: CHUNK_SIZE (256)
+function levelSize(level) {
+  return CHUNK_SIZE * Math.pow(2, N_LEVELS - 1 - level);
+}
+
 function groupMeta() {
   return {
     zarr_format: 3,
@@ -102,15 +110,14 @@ function groupMeta() {
 }
 
 function arrayMeta(level) {
-  const size = BASE_SIZE >> level;
-  const cs   = Math.min(CHUNK_SIZE, size);
+  const size = levelSize(level);
   return {
     zarr_format: 3,
     node_type: 'array',
     shape: [1, size, size],
     chunk_grid: {
       name: 'regular',
-      configuration: {chunk_shape: [1, cs, cs]},
+      configuration: {chunk_shape: [1, CHUNK_SIZE, CHUNK_SIZE]},
     },
     chunk_key_encoding: {name: 'default', separator: '/'},
     fill_value: 0,
@@ -121,16 +128,15 @@ function arrayMeta(level) {
 }
 
 function computeChunk(level, cy, cx) {
-  const size = BASE_SIZE >> level;
-  const cs   = Math.min(CHUNK_SIZE, size);
-  const data = new Uint8Array(cs * cs);
+  const size = levelSize(level);
+  const data = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
   const xScale = (X_MAX - X_MIN) / size;
   const yScale = (Y_MAX - Y_MIN) / size;
 
-  for (let py = 0; py < cs; py++) {
-    const y0 = Y_MIN + (cy * cs + py) * yScale;
-    for (let px = 0; px < cs; px++) {
-      const x0 = X_MIN + (cx * cs + px) * xScale;
+  for (let py = 0; py < CHUNK_SIZE; py++) {
+    const y0 = Y_MIN + (cy * CHUNK_SIZE + py) * yScale;
+    for (let px = 0; px < CHUNK_SIZE; px++) {
+      const x0 = X_MIN + (cx * CHUNK_SIZE + px) * xScale;
       let x = 0, y = 0, n = 0;
       while (x * x + y * y <= 4 && n < MAX_ITER) {
         const xt = x * x - y * y + x0;
@@ -138,7 +144,7 @@ function computeChunk(level, cy, cx) {
         x = xt;
         n++;
       }
-      data[py * cs + px] = n;
+      data[py * CHUNK_SIZE + px] = n;
     }
   }
   return data;

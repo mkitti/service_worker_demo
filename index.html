@@ -10,124 +10,207 @@
     background: #0d1117;
     color: #c9d1d9;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    padding: 24px;
-    min-height: 100vh;
+    overflow: hidden;
+    height: 100vh;
   }
-  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 6px; color: #e6edf3; }
-  .subtitle { font-size: 0.85rem; color: #8b949e; margin-bottom: 24px; }
-  .layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-  canvas {
-    display: block;
-    width: 512px; height: 512px;
+
+  /* ── Top-level layout ────────────────────────────────────────── */
+  .app { display: flex; height: 100vh; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  .sidebar {
+    width: 272px;
+    min-width: 272px;
+    background: #0d1117;
+    border-right: 1px solid #21262d;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: #30363d transparent;
+  }
+  .sidebar.collapsed { width: 0; min-width: 0; opacity: 0; pointer-events: none; }
+  .sidebar-inner {
+    padding: 12px;
+    min-width: 272px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ── Main viewer ─────────────────────────────────────────────── */
+  .viewer { flex: 1; position: relative; background: #000; min-width: 0; }
+  #ng-viewer { width: 100%; height: 100%; border: none; display: none; }
+
+  #placeholder {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: #6e7681; font-size: 0.88rem; gap: 14px;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid #21262d;
+    border-top-color: #1f6feb;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toggle button — floats over the viewer, always visible */
+  #toggle-btn {
+    position: absolute;
+    top: 10px; left: 10px;
+    z-index: 200;
+    background: rgba(13, 17, 23, 0.82);
     border: 1px solid #30363d;
-    border-radius: 6px;
-    background: #000;
-    flex-shrink: 0;
+    color: #8b949e;
+    cursor: pointer;
+    padding: 5px 9px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    line-height: 1;
+    backdrop-filter: blur(6px);
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
   }
-  .sidebar { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
+  #toggle-btn:hover { color: #e6edf3; border-color: #58a6ff; }
+
+  /* ── Cards ───────────────────────────────────────────────────── */
+  h1 { font-size: 0.92rem; font-weight: 600; color: #e6edf3; line-height: 1.35; }
+  .subtitle { font-size: 0.7rem; color: #6e7681; margin-top: 4px; line-height: 1.4; }
+
   .card {
     background: #161b22;
-    border: 1px solid #30363d;
+    border: 1px solid #21262d;
     border-radius: 6px;
-    padding: 14px 16px;
+    padding: 9px 11px;
   }
-  .card h2 { font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.05em; color: #8b949e; margin-bottom: 10px; }
+  .card-title {
+    font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #6e7681; margin-bottom: 7px;
+  }
+
   .badge {
     display: inline-block; padding: 2px 8px; border-radius: 12px;
-    font-size: 0.75rem; font-weight: 600; margin-bottom: 8px;
+    font-size: 0.7rem; font-weight: 600; margin-bottom: 5px;
   }
-  .badge.ok  { background: #1a4731; color: #3fb950; }
+  .badge.ok   { background: #1a4731; color: #3fb950; }
   .badge.wait { background: #2d2208; color: #d29922; }
   .badge.err  { background: #3d0d0d; color: #f85149; }
-  #status-text { font-size: 0.85rem; color: #c9d1d9; }
+
+  #status-text { font-size: 0.75rem; color: #8b949e; }
   #progress-bar-wrap {
-    height: 6px; background: #21262d; border-radius: 3px; margin-top: 10px; overflow: hidden;
+    height: 3px; background: #21262d; border-radius: 2px; margin-top: 8px; overflow: hidden;
   }
-  #progress-bar { height: 100%; width: 0; background: #1f6feb; border-radius: 3px;
-    transition: width 0.15s ease; }
-  #meta-box { font-size: 0.78rem; font-family: monospace; color: #79c0ff;
-    white-space: pre; overflow-x: auto; }
+  #progress-bar {
+    height: 100%; width: 0; background: #1f6feb; border-radius: 2px;
+    transition: width 0.15s ease;
+  }
+
+  canvas {
+    display: block; width: 100%; border-radius: 4px;
+    image-rendering: pixelated; border: 1px solid #21262d;
+  }
+
   #log {
-    font-size: 0.72rem; font-family: monospace; color: #8b949e;
-    height: 140px; overflow-y: auto; display: flex; flex-direction: column-reverse;
+    font-size: 0.67rem; font-family: monospace; color: #6e7681;
+    height: 130px; overflow-y: auto; display: flex; flex-direction: column-reverse;
+    scrollbar-width: thin; scrollbar-color: #30363d transparent;
   }
-  #log div { padding: 1px 0; }
+  #log div { padding: 1px 0; line-height: 1.4; }
   #log div.chunk { color: #56d364; }
+
+  #meta-box {
+    font-size: 0.65rem; font-family: monospace; color: #79c0ff;
+    white-space: pre; overflow-x: auto; line-height: 1.5;
+    scrollbar-width: thin; scrollbar-color: #30363d transparent;
+  }
+
   .ng-link {
-    font-size: 0.78rem; word-break: break-all; color: #58a6ff;
-    text-decoration: none; display: block; margin-top: 6px;
+    font-size: 0.72rem; color: #58a6ff; text-decoration: none;
+    word-break: break-all; display: inline-block;
   }
   .ng-link:hover { text-decoration: underline; }
-  .note { font-size: 0.75rem; color: #8b949e; margin-top: 6px; }
+  .note { font-size: 0.68rem; color: #6e7681; margin-top: 5px; line-height: 1.4; }
 </style>
 </head>
 <body>
-<h1>Mandelbrot via Service Worker + Zarr v3</h1>
-<p class="subtitle">
-  A JavaScript service worker intercepts HTTP requests and synthesizes Zarr v3 chunks
-  <strong style="color:#e6edf3">on demand, with zero pre-rendering</strong> —
-  no server, no pre-computed data. The Mandelbrot set is computed in the worker thread
-  at the moment each chunk is requested. The chunk log below shows every computation as it happens.
-  10-level OME-NGFF 0.5 pyramid (131072 → 256 px) served entirely from client-side JS.
-</p>
+<div class="app">
 
-<div class="layout">
-  <canvas id="canvas" width="512" height="512"></canvas>
+  <!-- ── Sidebar ───────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner">
 
-  <div class="sidebar">
-    <!-- Status -->
-    <div class="card">
-      <h2>Status</h2>
-      <span id="status-badge" class="badge wait">Initializing</span>
-      <div id="status-text">Registering service worker…</div>
-      <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <div>
+        <h1>Mandelbrot via<br>Service Worker + Zarr&nbsp;v3</h1>
+        <div class="subtitle">
+          256-level OME-NGFF&nbsp;0.5 pyramid · computed on demand ·
+          zero pre-rendering · served entirely from client-side&nbsp;JS
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="card">
+        <div class="card-title">Status</div>
+        <span id="status-badge" class="badge wait">Initializing</span>
+        <div id="status-text">Registering service worker…</div>
+        <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+      </div>
+
+      <!-- Thumbnail canvas (level 255 = 1 chunk, 256×256 px) -->
+      <div class="card">
+        <div class="card-title">Preview — level&nbsp;255 · 256×256&nbsp;px</div>
+        <canvas id="canvas" width="256" height="256"></canvas>
+      </div>
+
+      <!-- Live chunk log -->
+      <div class="card">
+        <div class="card-title">Live Chunk Log</div>
+        <div id="log"></div>
+      </div>
+
+      <!-- Zarr metadata -->
+      <div class="card">
+        <div class="card-title">Zarr&nbsp;v3 Metadata — level&nbsp;255</div>
+        <div id="meta-box">Loading…</div>
+      </div>
+
+      <!-- Open-in-tab link -->
+      <div class="card">
+        <div class="card-title">Open in full tab</div>
+        <a id="ng-link" class="ng-link" href="#">(waiting for service worker…)</a>
+        <p class="note">
+          Self-hosted Neuroglancer on the same origin — the service worker
+          intercepts its Zarr requests too.
+        </p>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ── Main viewer ────────────────────────────────────────────── -->
+  <main class="viewer">
+    <button id="toggle-btn" title="Toggle sidebar">☰</button>
+
+    <div id="placeholder">
+      <div class="spinner"></div>
+      <span id="placeholder-text">Registering service worker…</span>
     </div>
 
-    <!-- Zarr metadata -->
-    <div class="card">
-      <h2>Zarr v3 Metadata  <code style="font-size:0.75rem;color:#8b949e">/zarr/mandelbrot/8/zarr.json</code></h2>
-      <div id="meta-box">Loading…</div>
-    </div>
+    <iframe id="ng-viewer" title="Neuroglancer" allowfullscreen></iframe>
+  </main>
 
-    <!-- Chunk log -->
-    <div class="card">
-      <h2>Chunk Log  (service worker → browser)</h2>
-      <div id="log"></div>
-    </div>
-
-    <!-- Neuroglancer -->
-    <div class="card">
-      <h2>Open in Neuroglancer</h2>
-      <a id="ng-link" class="ng-link" href="#" target="_blank">Building link…</a>
-      <p class="note">
-        Opens a self-hosted Neuroglancer on the same origin as this page, so the
-        service worker intercepts its chunk requests too. Visit this demo page
-        first to register the SW, then click the link above.
-      </p>
-    </div>
-  </div>
 </div>
-
 <script>
-const CANVAS_PX  = 512;
-// Use pyramid level 8 (512×512) for the canvas preview — 1:1 pixel mapping,
-// only 4 chunks to fetch, renders quickly. (131072 >> 8 = 512)
-const CANVAS_LEVEL = 8;
-const SHAPE_H    = 512;   // 8192 >> 4
-const SHAPE_W    = 512;
-const CHUNK_H    = 256;
-const CHUNK_W    = 256;
-const CHUNKS_Y   = SHAPE_H / CHUNK_H;   // 2
-const CHUNKS_X   = SHAPE_W / CHUNK_W;   // 2
-const TOTAL      = CHUNKS_Y * CHUNKS_X; // 4
-const SCALE      = SHAPE_H / CANVAS_PX; // 1  (no scaling needed)
+// Coarsest level: 256×256 px, exactly 1 chunk — renders instantly as thumbnail.
+const CANVAS_LEVEL = 255;
 
 const canvas  = document.getElementById('canvas');
 const ctx     = canvas.getContext('2d');
-const imgData = ctx.createImageData(CANVAS_PX, CANVAS_PX);
+const imgData = ctx.createImageData(256, 256);
 
-// ── colormap ────────────────────────────────────────────────────────────────
+// ── Colormap ──────────────────────────────────────────────────────────────────
 const STOPS = [
   [0,   [  0,   7, 100]],
   [64,  [ 12,  44, 138]],
@@ -136,9 +219,8 @@ const STOPS = [
   [240, [255, 170,   0]],
   [254, [220,  80,   0]],
 ];
-
 function colorize(v) {
-  if (v >= 255) return [0, 0, 0]; // inside set
+  if (v >= 255) return [0, 0, 0];
   for (let i = 1; i < STOPS.length; i++) {
     const [t1, c1] = STOPS[i];
     if (v <= t1) {
@@ -150,7 +232,7 @@ function colorize(v) {
   return STOPS[STOPS.length - 1][1];
 }
 
-// ── logging helpers ──────────────────────────────────────────────────────────
+// ── UI helpers ────────────────────────────────────────────────────────────────
 const logEl    = document.getElementById('log');
 const badge    = document.getElementById('status-badge');
 const statusEl = document.getElementById('status-text');
@@ -169,42 +251,28 @@ function setStatus(text, state = 'wait') {
   badge.className = 'badge ' + state;
 }
 
-function setProgress(n) {
-  barEl.style.width = Math.round((n / TOTAL) * 100) + '%';
-}
+// ── Sidebar toggle ────────────────────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+document.getElementById('toggle-btn').addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
 
-// ── chunk renderer ───────────────────────────────────────────────────────────
-function paintChunk(cy, cx, raw) {
-  const step = SCALE; // sample stride in source pixels
-  const dstTileH = CHUNK_H / step;
-  const dstTileW = CHUNK_W / step;
-  const dstY0 = cy * dstTileH;
-  const dstX0 = cx * dstTileW;
-
-  for (let py = 0; py < dstTileH; py++) {
-    for (let px = 0; px < dstTileW; px++) {
-      const srcIdx = (py * step) * CHUNK_W + (px * step);
-      const [r, g, b] = colorize(raw[srcIdx]);
-      const dstIdx = ((dstY0 + py) * CANVAS_PX + (dstX0 + px)) * 4;
-      imgData.data[dstIdx]     = r;
-      imgData.data[dstIdx + 1] = g;
-      imgData.data[dstIdx + 2] = b;
-      imgData.data[dstIdx + 3] = 255;
-    }
-  }
-  ctx.putImageData(imgData, 0, 0);
-}
-
-// ── neuroglancer link ─────────────────────────────────────────────────────────
-function buildNgLink() {
+// ── Neuroglancer state builder ────────────────────────────────────────────────
+function buildNgUrl() {
   const zarrUrl = new URL('./zarr/mandelbrot', window.location.href).href;
   const src = `zarr://${zarrUrl}`;
-  // Position is in level-0 voxels. Center of 131072-px array = 65536.
-  // crossSectionScale: proportional to 13.28 (working at 8192px) * 16 = ~213.
+
+  // With N_LEVELS=256, level 0 (finest) is at 1 nm/px.
+  // Physical extent = CHUNK_SIZE * 2^255 nm; center = CHUNK_SIZE/2 * 2^255 nm.
+  // crossSectionScale scales from the 10-level baseline (213 nm/px at 131072 nm extent)
+  // proportionally to the new extent: 213 * (256*2^255 / 131072) = 213 * 2^246.
+  const center = 128 * Math.pow(2, 255);
+  const crossSectionScale = 213 * Math.pow(2, 246);
+
   const state = {
     dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},
-    position: [65536, 65536, 0.5],
-    crossSectionScale: 213,
+    position: [center, center, 0.5],
+    crossSectionScale: crossSectionScale,
     projectionScale: 2048,
     layers: [{
       type: 'image',
@@ -214,25 +282,23 @@ function buildNgLink() {
       crossSectionRenderScale: 0.0625,
       name: 'mandelbrot',
     }],
-    selectedLayer: {visible: true, layer: 'mandelbrot'},
+    // Omit visible:true so Neuroglancer side panels start collapsed.
+    selectedLayer: {layer: 'mandelbrot'},
     layout: 'xy',
   };
-  // Point at our self-hosted Neuroglancer (same origin = SW can intercept its fetches)
-  const ngUrl = new URL('./neuroglancer/', window.location.href).href;
-  const url = ngUrl + '#!' + JSON.stringify(state);
-  const el = document.getElementById('ng-link');
-  el.href = url;
-  el.textContent = src;
+
+  const ngBase = new URL('./neuroglancer/', window.location.href).href;
+  return ngBase + '#!' + JSON.stringify(state);
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   if (!('serviceWorker' in navigator)) {
     setStatus('Service workers not supported in this browser.', 'err');
     return;
   }
 
-  // Listen for chunk-served messages from the SW
+  // Forward SW chunk-served messages to the log
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.type === 'chunk-served') log(e.data.msg, 'chunk');
   });
@@ -240,48 +306,54 @@ async function main() {
   log('Registering service worker…');
   await navigator.serviceWorker.register('./sw.js');
 
-  // Wait until this page is controlled by the SW (may need one tick after claim())
   if (!navigator.serviceWorker.controller) {
     setStatus('Waiting for service worker to activate…');
+    document.getElementById('placeholder-text').textContent =
+      'Waiting for service worker to activate…';
     await new Promise(resolve =>
       navigator.serviceWorker.addEventListener('controllerchange', resolve, {once: true})
     );
   }
-  log('Service worker active — fetching Zarr metadata');
-  setStatus('Service worker active');
+  log('Service worker active');
+  setStatus('Fetching Zarr metadata…');
 
-  // Fetch & display metadata
+  // Fetch level-255 array metadata and display it
   const meta = await fetch(`./zarr/mandelbrot/${CANVAS_LEVEL}/zarr.json`).then(r => r.json());
   document.getElementById('meta-box').textContent = JSON.stringify(meta, null, 2);
 
-  buildNgLink();
+  // Build Neuroglancer URL and wire up the iframe + open-in-tab link
+  const ngUrl = buildNgUrl();
+  const ngLink = document.getElementById('ng-link');
+  ngLink.href = ngUrl;
+  ngLink.textContent = 'Open in full tab ↗';
 
-  // Load all 64 chunks in parallel, paint each as it arrives
-  let done = 0;
-  setStatus(`Loading ${TOTAL} Zarr v3 chunks…`);
+  document.getElementById('placeholder').style.display = 'none';
+  const iframe = document.getElementById('ng-viewer');
+  iframe.style.display = 'block';
+  iframe.src = ngUrl;
 
-  const chunkJobs = [];
-  for (let cy = 0; cy < CHUNKS_Y; cy++) {
-    for (let cx = 0; cx < CHUNKS_X; cx++) {
-      chunkJobs.push(
-        fetch(`./zarr/mandelbrot/${CANVAS_LEVEL}/c/0/${cy}/${cx}`)
-          .then(r => r.arrayBuffer())
-          .then(buf => {
-            paintChunk(cy, cx, new Uint8Array(buf));
-            done++;
-            setProgress(done);
-            if (done === TOTAL) setStatus(`All ${TOTAL} chunks loaded.`, 'ok');
-          })
-      );
+  // Render the coarsest level as a sidebar thumbnail (1 chunk, 256×256)
+  setStatus('Loading preview chunk…');
+  const resp = await fetch(`./zarr/mandelbrot/${CANVAS_LEVEL}/c/0/0/0`);
+  const raw  = new Uint8Array(await resp.arrayBuffer());
+  for (let py = 0; py < 256; py++) {
+    for (let px = 0; px < 256; px++) {
+      const v = raw[py * 256 + px];
+      const [r, g, b] = colorize(v);
+      const i = (py * 256 + px) * 4;
+      imgData.data[i] = r; imgData.data[i + 1] = g; imgData.data[i + 2] = b; imgData.data[i + 3] = 255;
     }
   }
-
-  await Promise.all(chunkJobs);
+  ctx.putImageData(imgData, 0, 0);
+  barEl.style.width = '100%';
+  setStatus('Ready — 256-level pyramid active', 'ok');
 }
 
 main().catch(err => {
   setStatus('Error: ' + err.message, 'err');
   log('ERROR: ' + err.message);
+  document.getElementById('placeholder').innerHTML =
+    `<span style="color:#f85149;font-size:0.85rem">Service worker error — see console.</span>`;
 });
 </script>
 </body>

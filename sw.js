@@ -2,11 +2,12 @@
 // e.g. '/' on localhost, '/service_worker_demo/' on GitHub Pages
 const SW_BASE = new URL('.', self.location.href).pathname;
 const ZARR_PREFIX = SW_BASE + 'zarr/mandelbrot';
-const SHAPE_H = 2048;
-const SHAPE_W = 2048;
-const CHUNK_H = 256;
-const CHUNK_W = 256;
-const MAX_ITER = 255;
+
+// Pyramid: level 0 = finest (BASE_SIZE×BASE_SIZE), each level halves resolution
+const N_LEVELS  = 6;
+const BASE_SIZE = 8192;   // pixels at level 0
+const CHUNK_SIZE = 256;
+const MAX_ITER   = 255;
 const X_MIN = -2.5, X_MAX = 1.0;
 const Y_MIN = -1.25, Y_MAX = 1.25;
 
@@ -27,38 +28,40 @@ function corsHeaders() {
   };
 }
 
+function jsonResponse(obj) {
+  return new Response(JSON.stringify(obj, null, 2), {
+    headers: {'Content-Type': 'application/json', ...corsHeaders()},
+  });
+}
+
 function handleZarr(subpath) {
   const path = subpath.replace(/^\//, '');
+  const parts = path === '' ? [] : path.split('/');
 
+  // ── Group root: OME-NGFF 0.5 multiscales metadata ──────────────────────────
   if (path === '' || path === 'zarr.json') {
-    const meta = {
-      zarr_format: 3,
-      node_type: 'array',
-      shape: [1, SHAPE_H, SHAPE_W],
-      chunk_grid: {
-        name: 'regular',
-        configuration: {chunk_shape: [1, CHUNK_H, CHUNK_W]},
-      },
-      chunk_key_encoding: {name: 'default', separator: '/'},
-      fill_value: 0,
-      codecs: [{name: 'bytes', configuration: {endian: 'little'}}],
-      data_type: 'uint8',
-      dimension_names: ['z', 'y', 'x'],
-    };
-    return new Response(JSON.stringify(meta, null, 2), {
-      headers: {'Content-Type': 'application/json', ...corsHeaders()},
-    });
+    return jsonResponse(groupMeta());
   }
 
-  // Zarr v3 default chunk key encoding: "c/{z}/{cy}/{cx}"
-  const parts = path.split('/');
-  if (parts.length === 4 && parts[0] === 'c') {
-    const [, z, cy, cx] = parts.map((v, i) => i === 0 ? v : Number(v));
-    if (z === 0 && Number.isFinite(cy) && Number.isFinite(cx)) {
+  const level = Number(parts[0]);
+  if (!Number.isFinite(level) || level < 0 || level >= N_LEVELS) {
+    return new Response('Not found', {status: 404, headers: corsHeaders()});
+  }
+
+  // ── Array metadata: "{level}/zarr.json" ────────────────────────────────────
+  if (parts.length === 2 && parts[1] === 'zarr.json') {
+    return jsonResponse(arrayMeta(level));
+  }
+
+  // ── Chunk: "{level}/c/0/{cy}/{cx}" ─────────────────────────────────────────
+  if (parts.length === 5 && parts[1] === 'c' && parts[2] === '0') {
+    const cy = Number(parts[3]);
+    const cx = Number(parts[4]);
+    if (Number.isFinite(cy) && Number.isFinite(cx)) {
       const t0 = performance.now();
-      const data = computeChunk(cy, cx);
+      const data = computeChunk(level, cy, cx);
       const elapsed = (performance.now() - t0).toFixed(1);
-      notifyClients(`chunk 0/${cy}/${cx} computed in ${elapsed} ms`);
+      notifyClients(`L${level} chunk ${cy}/${cx} in ${elapsed} ms`);
       return new Response(data, {
         headers: {'Content-Type': 'application/octet-stream', ...corsHeaders()},
       });
@@ -68,15 +71,66 @@ function handleZarr(subpath) {
   return new Response('Not found', {status: 404, headers: corsHeaders()});
 }
 
-function computeChunk(cy, cx) {
-  const data = new Uint8Array(CHUNK_H * CHUNK_W);
-  const xScale = (X_MAX - X_MIN) / SHAPE_W;
-  const yScale = (Y_MAX - Y_MIN) / SHAPE_H;
+function groupMeta() {
+  return {
+    zarr_format: 3,
+    node_type: 'group',
+    attributes: {
+      ome: {
+        version: '0.5',
+        multiscales: [{
+          name: 'mandelbrot',
+          axes: [
+            {name: 'z', type: 'space', unit: 'nanometer'},
+            {name: 'y', type: 'space', unit: 'nanometer'},
+            {name: 'x', type: 'space', unit: 'nanometer'},
+          ],
+          datasets: Array.from({length: N_LEVELS}, (_, k) => ({
+            path: String(k),
+            coordinateTransformations: [
+              {type: 'scale', scale: [1.0, Math.pow(2, k), Math.pow(2, k)]},
+            ],
+          })),
+          coordinateTransformations: [
+            {type: 'scale', scale: [1.0, 1.0, 1.0]},
+          ],
+          type: 'gaussian',
+        }],
+      },
+    },
+  };
+}
 
-  for (let py = 0; py < CHUNK_H; py++) {
-    const y0 = Y_MIN + (cy * CHUNK_H + py) * yScale;
-    for (let px = 0; px < CHUNK_W; px++) {
-      const x0 = X_MIN + (cx * CHUNK_W + px) * xScale;
+function arrayMeta(level) {
+  const size = BASE_SIZE >> level;
+  const cs   = Math.min(CHUNK_SIZE, size);
+  return {
+    zarr_format: 3,
+    node_type: 'array',
+    shape: [1, size, size],
+    chunk_grid: {
+      name: 'regular',
+      configuration: {chunk_shape: [1, cs, cs]},
+    },
+    chunk_key_encoding: {name: 'default', separator: '/'},
+    fill_value: 0,
+    codecs: [{name: 'bytes', configuration: {endian: 'little'}}],
+    data_type: 'uint8',
+    dimension_names: ['z', 'y', 'x'],
+  };
+}
+
+function computeChunk(level, cy, cx) {
+  const size = BASE_SIZE >> level;
+  const cs   = Math.min(CHUNK_SIZE, size);
+  const data = new Uint8Array(cs * cs);
+  const xScale = (X_MAX - X_MIN) / size;
+  const yScale = (Y_MAX - Y_MIN) / size;
+
+  for (let py = 0; py < cs; py++) {
+    const y0 = Y_MIN + (cy * cs + py) * yScale;
+    for (let px = 0; px < cs; px++) {
+      const x0 = X_MIN + (cx * cs + px) * xScale;
       let x = 0, y = 0, n = 0;
       while (x * x + y * y <= 4 && n < MAX_ITER) {
         const xt = x * x - y * y + x0;
@@ -84,7 +138,7 @@ function computeChunk(cy, cx) {
         x = xt;
         n++;
       }
-      data[py * CHUNK_W + px] = n; // MAX_ITER (255) means inside set
+      data[py * cs + px] = n;
     }
   }
   return data;

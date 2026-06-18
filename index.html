@@ -195,7 +195,7 @@ function buildNgLink() {
   const base = new URL('./zarr/mandelbrot', window.location.href).href;
   const src = `zarr://${base}`;
   const state = {
-    dimensions: {x: [1, 'px'], y: [1, 'px'], z: [1, 'px']},
+    dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},
     position: [1024.5, 1024.5, 0.5],
     crossSectionScale: 4,
     projectionScale: 2048,

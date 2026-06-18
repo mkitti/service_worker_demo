@@ -96,7 +96,12 @@ function groupMeta() {
           datasets: Array.from({length: N_LEVELS}, (_, k) => ({
             path: String(k),
             coordinateTransformations: [
-              {type: 'scale', scale: [1.0, Math.pow(2, k), Math.pow(2, k)]},
+              // Fixed physical extent: 8192 nm × 8192 nm at all levels.
+              // Level 255 (coarsest) = 256 px at 32 nm/px; each finer level halves pixel size.
+              // scale[k] = 32 / 2^(255-k) nm/px
+              {type: 'scale', scale: [1.0,
+                32 / Math.pow(2, N_LEVELS - 1 - k),
+                32 / Math.pow(2, N_LEVELS - 1 - k)]},
             ],
           })),
           coordinateTransformations: [

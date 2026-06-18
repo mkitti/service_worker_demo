@@ -262,12 +262,11 @@ function buildNgUrl() {
   const zarrUrl = new URL('./zarr/mandelbrot', window.location.href).href;
   const src = `zarr://${zarrUrl}`;
 
-  // With N_LEVELS=256, level 0 (finest) is at 1 nm/px.
-  // Physical extent = CHUNK_SIZE * 2^255 nm; center = CHUNK_SIZE/2 * 2^255 nm.
-  // crossSectionScale scales from the 10-level baseline (213 nm/px at 131072 nm extent)
-  // proportionally to the new extent: 213 * (256*2^255 / 131072) = 213 * 2^246.
-  const center = 128 * Math.pow(2, 255);
-  const crossSectionScale = 213 * Math.pow(2, 246);
+  // Fixed physical extent: 8192 nm × 8192 nm (same as the old 8192-px level-0 design).
+  // Level 255 (coarsest) = 256 px at 32 nm/px.  Center = 4096 nm.
+  // crossSectionScale: 213 nm/px showed 131072 nm; scale to 8192 nm → 213/16 ≈ 13.3.
+  const center = 4096;
+  const crossSectionScale = 13.3125;
 
   const state = {
     dimensions: {x: [1e-9, 'm'], y: [1e-9, 'm'], z: [1e-9, 'm']},

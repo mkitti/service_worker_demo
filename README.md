@@ -59,10 +59,10 @@ The SW serves a Zarr *group* at `./zarr/mandelbrot/` whose root `zarr.json` carr
       "version": "0.5",
       "multiscales": [{
         "datasets": [
-          { "path": "0",   "coordinateTransformations": [{"type":"scale","scale":[1,1,1]}] },
-          { "path": "1",   "coordinateTransformations": [{"type":"scale","scale":[1,2,2]}] },
+          { "path": "0",   "coordinateTransformations": [{"type":"scale","scale":[1, 32/2²⁵⁵, 32/2²⁵⁵]}] },
+          { "path": "1",   "coordinateTransformations": [{"type":"scale","scale":[1, 32/2²⁵⁴, 32/2²⁵⁴]}] },
           ...
-          { "path": "255", "coordinateTransformations": [{"type":"scale","scale":[1,2²⁵⁵,2²⁵⁵]}] }
+          { "path": "255", "coordinateTransformations": [{"type":"scale","scale":[1,32,32]}] }
         ]
       }]
     }
@@ -70,7 +70,7 @@ The SW serves a Zarr *group* at `./zarr/mandelbrot/` whose root `zarr.json` carr
 }
 ```
 
-Each level `k` is a separate Zarr array with shape `[1, 256·2^(255−k), 256·2^(255−k)]`. Level 0 (finest) has ≈ 2²⁶³ pixels per side; level 255 (coarsest) is 256×256. Neuroglancer reads this metadata and automatically selects the appropriate level as you zoom.
+All 256 levels share the same **fixed physical extent of 8192 nm × 8192 nm**. Level 255 (coarsest) has 256 pixels at 32 nm/px; each finer level halves the pixel size. Level 0 (finest) has ≈ 2²⁶³ pixels at 32/2²⁵⁵ nm/px. Neuroglancer reads this metadata and automatically selects the appropriate level as you zoom; the position center stays at 4096 nm — a small, manageable number for the viewer state.
 
 ---
 
